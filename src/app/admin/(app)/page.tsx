@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarPlus, UserPlus, Wallet, Video } from "lucide-react";
+import { AlertTriangle, CalendarCheck2, CalendarClock, CalendarPlus, HandCoins, MessageSquare, Stethoscope, UserPlus, Wallet, Video, Wallet2 } from "lucide-react";
 import { prisma } from "@/lib/db";
 import { ownProfessionalScope, requireUser } from "@/lib/auth";
 import { can } from "@/lib/permissions";
@@ -57,26 +57,26 @@ export default async function Dashboard({ searchParams }: PageProps<"/admin">) {
             )}
             {can(user, "pacientes", "create") && (
               <Link href="/admin/pacientes/novo" className="btn-secondary">
-                <UserPlus className="size-4" aria-hidden /> Novo paciente
+                <UserPlus className="size-4 text-violet-600" aria-hidden /> Novo paciente
               </Link>
             )}
             {can(user, "financeiro", "create") && (
               <Link href="/admin/financeiro/novo" className="btn-secondary">
-                <Wallet className="size-4" aria-hidden /> Registrar pagamento
+                <Wallet className="size-4 text-emerald-600" aria-hidden /> Registrar pagamento
               </Link>
             )}
           </>
         }
       />
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Consultas hoje" value={todayAppts.length} hint={`${todayAppts.filter((a) => a.status === "REALIZADA").length} realizadas`} href="/admin/agenda" />
-        <Stat label="A confirmar (3 dias)" value={toConfirm} hint="Agendadas sem confirmação" href="/admin/agenda" />
-        {can(user, "financeiro") && <Stat label="Recebido no mês" value={brl(paidMonth._sum.amountCents)} href="/admin/financeiro?status=PAGO" />}
-        {can(user, "financeiro") && <Stat label="A receber" value={brl(pending._sum.amountCents)} hint={`${pending._count} pagamentos pendentes`} href="/admin/financeiro?status=PENDENTE" />}
-        {can(user, "mensagens") && <Stat label="Mensagens novas" value={newMsgs} href="/admin/mensagens" />}
-        <Stat label="Pacientes novos no mês" value={newPatients} href="/admin/pacientes" />
-        <Stat label="Atendimentos no mês" value={monthDone} />
-        <Stat label="Taxa de faltas no mês" value={`${noShow}%`} hint={`${monthMissed} faltas`} />
+        <Stat icon={CalendarCheck2} tone="sky" label="Consultas hoje" value={todayAppts.length} hint={`${todayAppts.filter((a) => a.status === "REALIZADA").length} realizadas`} href="/admin/agenda" />
+        <Stat icon={CalendarClock} tone="amber" label="A confirmar (3 dias)" value={toConfirm} hint="Agendadas sem confirmação" href="/admin/agenda" />
+        {can(user, "financeiro") && <Stat icon={Wallet2} tone="emerald" label="Recebido no mês" value={brl(paidMonth._sum.amountCents)} href="/admin/financeiro?status=PAGO" />}
+        {can(user, "financeiro") && <Stat icon={HandCoins} tone="teal" label="A receber" value={brl(pending._sum.amountCents)} hint={`${pending._count} pagamentos pendentes`} href="/admin/financeiro?status=PENDENTE" />}
+        {can(user, "mensagens") && <Stat icon={MessageSquare} tone="orange" label="Mensagens novas" value={newMsgs} href="/admin/mensagens" />}
+        <Stat icon={UserPlus} tone="violet" label="Pacientes novos no mês" value={newPatients} href="/admin/pacientes" />
+        <Stat icon={Stethoscope} tone="rose" label="Atendimentos no mês" value={monthDone} />
+        <Stat icon={AlertTriangle} tone="red" label="Taxa de faltas no mês" value={`${noShow}%`} hint={`${monthMissed} faltas`} />
       </div>
 
       <section className="mt-8">

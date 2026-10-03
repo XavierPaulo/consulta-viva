@@ -34,6 +34,8 @@ const ICONS: Record<string, LucideIcon> = {
   auditoria: ClipboardList,
 };
 
+import { MODULE_TONE, TONE } from "./tones";
+
 export type NavItem = { href: string; label: string; icon: string; badge?: number };
 
 function Items({ items, onNavigate }: { items: NavItem[]; onNavigate?: () => void }) {
@@ -42,6 +44,7 @@ function Items({ items, onNavigate }: { items: NavItem[]; onNavigate?: () => voi
     <ul className="space-y-0.5">
       {items.map((it) => {
         const Icon = ICONS[it.icon] ?? LayoutDashboard;
+        const tone = TONE[MODULE_TONE[it.icon] ?? "teal"];
         const active = it.href === "/admin" ? pathname === "/admin" : pathname.startsWith(it.href);
         return (
           <li key={it.href}>
@@ -49,11 +52,13 @@ function Items({ items, onNavigate }: { items: NavItem[]; onNavigate?: () => voi
               href={it.href}
               onClick={onNavigate}
               aria-current={active ? "page" : undefined}
-              className={`flex min-h-11 items-center gap-3 rounded-xl px-3 text-[15px] font-medium transition ${
-                active ? "bg-brand-50 text-brand-800" : "text-muted hover:bg-slate-50 hover:text-foreground"
+              className={`flex min-h-11 items-center gap-3 rounded-xl px-2 text-[15px] font-medium transition ${
+                active ? "bg-slate-100 text-foreground" : "text-muted hover:bg-slate-50 hover:text-foreground"
               }`}
             >
-              <Icon className="size-5 shrink-0" aria-hidden />
+              <span className={`grid size-8 shrink-0 place-items-center rounded-lg ring-1 ring-inset ${active ? `${tone.solid} text-white ring-transparent` : tone.chip}`}>
+                <Icon className="size-[18px]" aria-hidden />
+              </span>
               <span className="flex-1">{it.label}</span>
               {!!it.badge && <span className="rounded-full bg-brand px-2 py-0.5 text-xs font-semibold text-white">{it.badge}</span>}
             </Link>

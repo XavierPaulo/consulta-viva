@@ -149,7 +149,7 @@ export default async function Home() {
         <div className="grid gap-4 md:grid-cols-3">
           <div className="card p-5">
             <h3 className="flex items-center gap-2 font-semibold">
-              <Clock className="size-5 text-brand-700" aria-hidden /> Horário de funcionamento
+              <Clock className="size-5 text-sky-600" aria-hidden /> Horário de funcionamento
             </h3>
             <p className="mt-2 whitespace-pre-line text-muted">{clinic.openingHours || "Consulte a agenda online."}</p>
             {units.length > 0 && (
@@ -165,12 +165,12 @@ export default async function Home() {
               </ul>
             )}
             <Link href="/agendar" className="btn-ghost btn-sm mt-3 -ml-3">
-              <CalendarClock className="size-4" aria-hidden /> Ver agenda disponível
+              <CalendarClock className="size-4 text-sky-600" aria-hidden /> Ver agenda disponível
             </Link>
           </div>
           <div className="card p-5">
             <h3 className="flex items-center gap-2 font-semibold">
-              <CreditCard className="size-5 text-brand-700" aria-hidden /> Formas de pagamento
+              <CreditCard className="size-5 text-emerald-600" aria-hidden /> Formas de pagamento
             </h3>
             <ul className="mt-3 flex flex-wrap gap-2">
               {clinic.paymentMethodList.map((m) => (
@@ -185,7 +185,7 @@ export default async function Home() {
           {show.convenios && (
             <div className="card p-5">
               <h3 className="flex items-center gap-2 font-semibold">
-                <ShieldCheck className="size-5 text-brand-700" aria-hidden /> Convênios aceitos
+                <ShieldCheck className="size-5 text-violet-600" aria-hidden /> Convênios aceitos
               </h3>
               <ul className="mt-3 flex flex-wrap gap-2">
                 {insurances.map((i) => (

@@ -14,6 +14,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { initials } from "@/lib/format";
+import { SPECIALTY_TONE, TONE, type Tone } from "./tones";
 
 const TONES: Record<string, string> = {
   blue: "bg-sky-50 text-sky-800 ring-sky-200",
@@ -138,10 +139,35 @@ export function Notice({ tone = "info", children }: { tone?: "info" | "success" 
   );
 }
 
-export function Stat({ label, value, hint, href }: { label: string; value: ReactNode; hint?: ReactNode; href?: string }) {
+export function IconChip({ icon: Icon, tone = "teal", size = "md" }: { icon: LucideIcon; tone?: Tone; size?: "sm" | "md" }) {
+  return (
+    <span className={`grid shrink-0 place-items-center rounded-xl ring-1 ring-inset ${TONE[tone].chip} ${size === "sm" ? "size-8" : "size-10"}`}>
+      <Icon className={size === "sm" ? "size-4" : "size-5"} aria-hidden />
+    </span>
+  );
+}
+
+export function Stat({
+  label,
+  value,
+  hint,
+  href,
+  icon,
+  tone,
+}: {
+  label: string;
+  value: ReactNode;
+  hint?: ReactNode;
+  href?: string;
+  icon?: LucideIcon;
+  tone?: Tone;
+}) {
   const body = (
     <>
-      <p className="text-sm font-medium text-muted">{label}</p>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm font-medium text-muted">{label}</p>
+        {icon && <IconChip icon={icon} tone={tone} size="sm" />}
+      </div>
       <p className="mt-1 text-2xl font-semibold tracking-tight tabular-nums">{value}</p>
       {hint && <p className="mt-0.5 text-[13px] text-muted">{hint}</p>}
     </>
@@ -172,4 +198,9 @@ export const SPECIALTY_ICON_KEYS = Object.keys(SPECIALTY_ICONS);
 export function SpecialtyIcon({ name, className = "size-6" }: { name: string; className?: string }) {
   const Icon = SPECIALTY_ICONS[name] ?? Stethoscope;
   return <Icon className={className} aria-hidden />;
+}
+
+/** Ícone da especialidade dentro de um quadrado com a cor própria dela. */
+export function SpecialtyChip({ name }: { name: string }) {
+  return <IconChip icon={SPECIALTY_ICONS[name] ?? Stethoscope} tone={SPECIALTY_TONE[name] ?? "teal"} />;
 }

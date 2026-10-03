@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Search } from "lucide-react";
 import { SpecialtyIconClient } from "./specialty-icon-client";
+import { SPECIALTY_TONE, TONE } from "./tones";
 
 type Item = { id: string; name: string; slug: string; description: string; symptoms: string; icon: string; doctors: number; tele: boolean };
 
@@ -63,7 +64,7 @@ export function SpecialtyGrid({ items }: { items: Item[] }) {
                 href={`/agendar?especialidade=${s.slug}`}
                 className="card group flex h-full flex-col p-5 transition hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-md"
               >
-                <span className="grid size-11 place-items-center rounded-xl bg-brand-50 text-brand-700 transition group-hover:bg-brand group-hover:text-white">
+                <span className={`grid size-11 place-items-center rounded-xl ring-1 ring-inset transition group-hover:scale-105 ${TONE[SPECIALTY_TONE[s.icon] ?? "teal"].chip}`}>
                   <SpecialtyIconClient name={s.icon} />
                 </span>
                 <span className="mt-3 font-semibold">{s.name}</span>
