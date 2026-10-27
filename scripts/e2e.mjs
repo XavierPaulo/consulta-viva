@@ -50,6 +50,8 @@ await step("pagar pelo link (cartão)", async () => {
 });
 await step("remarcar pelo link", async () => {
   await p.goto(manageUrl);
+  // se o primeiro horário livre for daqui a menos de 24 h, a remarcação online fica bloqueada (regra da clínica)
+  if (await p.getByText("Alterações online podem ser feitas até").count()) return console.log("  (consulta em menos de 24 h: remarcação bloqueada, como esperado)");
   await p.getByRole("button", { name: "Remarcar" }).click();
   await p.locator('label:has(input[name="start"])').nth(2).click();
   await p.getByRole("button", { name: "Confirmar novo horário" }).click();

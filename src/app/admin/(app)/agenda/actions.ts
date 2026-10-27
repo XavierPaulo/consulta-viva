@@ -4,7 +4,8 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { audit, ownProfessionalScope, requireUser } from "@/lib/auth";
-import { sendNotification } from "@/lib/notify";
+import { appUrl, sendNotification } from "@/lib/notify";
+import { sendManualReminder } from "@/lib/reminders";
 import { isSlotFree } from "@/lib/slots";
 import { fmtDateTime, isValidCpf, localToDate, onlyDigits, parseMoney } from "@/lib/format";
 import { APPOINTMENT_STATUS } from "@/lib/constants";
@@ -65,7 +66,7 @@ export async function createAppointment(_: ActionState, form: FormData): Promise
   });
   await audit(user, "CREATE", "Consulta", appt.id, `${fmtDateTime(start)} com ${pro.name}`);
   if (form.get("notify")) {
-    const body = `Olá, ${appt.patient.name.split(" ")[0]}! Sua consulta com ${pro.title} ${pro.name} está marcada para ${fmtDateTime(start)}. Para remarcar ou cancelar: /consulta/${appt.manageToken}`;
+    const body = `Olá, ${appt.patient.name.split(" ")[0]}! Sua consulta com ${pro.title} ${pro.name} está marcada para ${fmtDateTime(start)}. Para remarcar ou cancelar: ${appUrl(`/consulta/${appt.manageToken}`)}`;
     await sendNotification({ channel: "WHATSAPP", to: appt.patient.phone, body, related: appt.id });
     if (appt.patient.email) await sendNotification({ channel: "EMAIL", to: appt.patient.email, subject: "Consulta agendada", body, related: appt.id });
   }
@@ -135,10 +136,15 @@ export async function updateAppointment(id: string, _: ActionState, form: FormDa
 }
 
 export async function sendReminder(id: string) {
-  const { user, appt } = await loadEditable(id);
-  const body = `Lembrete: sua consulta com ${appt.professional.title} ${appt.professional.name} é em ${fmtDateTime(appt.start)}. Confirme ou remarque: /consulta/${appt.manageToken}`;
-  await sendNotification({ channel: "WHATSAPP", to: appt.patient.phone, body, related: id });
-  if (appt.patient.email) await sendNotification({ channel: "EMAIL", to: appt.patient.email, subject: "Lembrete de consulta", body, related: id });
+  const { user } = await loadEditable(id);
+  await sendManualReminder(id);
   await audit(user, "NOTIFY", "Consulta", id, "Lembrete enviado");
   revalidatePath(`/admin/agenda/${id}`);
+}
+
+/** Médico abriu a sala da teleconsulta. */
+export async function markDoctorJoined(id: string) {
+  const { user, appt } = await loadEditable(id);
+  if (!appt.doctorJoinedAt) await prisma.appointment.update({ where: { id }, data: { doctorJoinedAt: new Date() } });
+  await audit(user, "VIEW", "Teleconsulta", id, "Entrou na sala de vídeo");
 }

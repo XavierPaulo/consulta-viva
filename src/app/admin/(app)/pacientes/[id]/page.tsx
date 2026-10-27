@@ -10,7 +10,8 @@ import { SubmitButton } from "@/components/client";
 import { PatientFields } from "@/components/patient-fields";
 import { Avatar, Notice, PageHeader } from "@/components/ui";
 import { ApptStatus, PayStatus } from "@/components/status";
-import { updatePatient } from "../actions";
+import { resolvePrivacyRequest, updatePatient } from "../actions";
+import { PRIVACY_REQUEST_KINDS } from "@/lib/constants";
 
 export const metadata = { title: "Paciente" };
 
@@ -24,12 +25,14 @@ export default async function PacientePage({ params, searchParams }: PageProps<"
   const { id } = await params;
   const sp = await searchParams;
   const user = await requireUser("pacientes");
+  const insurances = await prisma.insurance.findMany({ where: { active: true }, orderBy: { name: "asc" }, select: { id: true, name: true } });
   const scope = ownProfessionalScope(user);
   const p = await prisma.patient.findUnique({
     where: { id },
     include: {
       appointments: { orderBy: { start: "desc" }, include: { professional: true }, take: 30 },
       payments: { orderBy: { createdAt: "desc" }, take: 20 },
+      requests: { where: { status: "ABERTO" }, orderBy: { createdAt: "asc" } },
       records: {
         orderBy: { createdAt: "desc" },
         include: { professional: true, prescriptions: true },
@@ -82,6 +85,32 @@ export default async function PacientePage({ params, searchParams }: PageProps<"
         <div className="mb-4">
           <Notice tone="warning">Consentimento LGPD para dados de saúde ainda não registrado. Colete antes do atendimento.</Notice>
         </div>
+      )}
+
+      {p.requests.length > 0 && (
+        <section className="card mb-5 border-amber-200 p-5">
+          <h2 className="font-semibold">Pedidos do paciente sobre os dados (LGPD)</h2>
+          <p className="text-sm text-muted">Feitos pela Área do paciente. Prazo legal de resposta: 15 dias.</p>
+          <ul className="mt-3 space-y-3">
+            {p.requests.map((r) => (
+              <li key={r.id} className="flex flex-wrap items-start justify-between gap-3 rounded-xl bg-amber-50 p-3">
+                <div className="text-[15px]">
+                  <p className="font-medium">
+                    {PRIVACY_REQUEST_KINDS[r.kind as keyof typeof PRIVACY_REQUEST_KINDS] ?? r.kind} <span className="text-sm font-normal text-muted">· {fmtDate(r.createdAt)}</span>
+                  </p>
+                  {r.details && <p className="text-muted">{r.details}</p>}
+                </div>
+                {can(user, "pacientes", "edit") && (
+                  <form action={resolvePrivacyRequest.bind(null, r.id)}>
+                    <SubmitButton className="btn-secondary btn-sm" pendingText="…">
+                      Marcar como atendido
+                    </SubmitButton>
+                  </form>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       <div className="grid gap-5 xl:grid-cols-[1fr_420px]">
@@ -157,7 +186,7 @@ export default async function PacientePage({ params, searchParams }: PageProps<"
             <h2 className="mb-4 text-lg font-semibold">Cadastro</h2>
             {can(user, "pacientes", "edit") ? (
               <ActionForm action={updatePatient.bind(null, p.id)} className="space-y-4">
-                <PatientFields p={p} />
+                <PatientFields p={p} insurances={insurances} />
                 <SubmitButton>Salvar</SubmitButton>
               </ActionForm>
             ) : (

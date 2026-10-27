@@ -87,3 +87,20 @@ export type SectionKey = (typeof PUBLIC_SECTIONS)[number]["key"];
 
 /** Prazo em que o autor ainda pode corrigir uma evolução; depois, só com nova evolução (adendo). */
 export const EDIT_WINDOW_HOURS = 24;
+
+/** Pedidos do titular dos dados (LGPD art. 18) feitos pela Área do paciente. */
+export const PRIVACY_REQUEST_KINDS = {
+  CORRECAO: "Corrigir dados que não consigo editar (nome, CPF, nascimento)",
+  REVOGACAO: "Revogar meu consentimento de uso de dados",
+  EXCLUSAO: "Excluir meus dados",
+  OUTRO: "Outro pedido sobre meus dados",
+} as const;
+
+/** Situação de um lote de guias TISS. */
+export const TISS_STATUS = {
+  GERADO: { label: "Gerado", tone: "blue" },
+  ENVIADO: { label: "Enviado", tone: "violet" },
+  PAGO: { label: "Pago", tone: "green" },
+  GLOSADO: { label: "Pago com glosa", tone: "amber" },
+  CANCELADO: { label: "Cancelado", tone: "gray" },
+} as const;

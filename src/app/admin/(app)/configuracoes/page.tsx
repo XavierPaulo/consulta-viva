@@ -4,7 +4,11 @@ import { requireUser } from "@/lib/auth";
 import { can } from "@/lib/permissions";
 import { getClinic } from "@/lib/clinic";
 import { PAYMENT_METHODS, PUBLIC_SECTIONS } from "@/lib/constants";
-import { centsToInput } from "@/lib/format";
+import { centsToInput, parseJson } from "@/lib/format";
+import { DEFAULT_TELE_CONSENT } from "@/lib/video";
+import { DEFAULT_REMINDER_TEMPLATE, REMINDER_VARS } from "@/lib/reminders";
+import { providerFor } from "@/lib/notify";
+import type { ClinicData } from "@/lib/clinic";
 import { ActionForm } from "@/components/action-form";
 import { SubmitButton } from "@/components/client";
 import { Badge, Field, PageHeader, SPECIALTY_ICON_KEYS } from "@/components/ui";
@@ -16,7 +20,11 @@ import {
   saveInsurance,
   saveLegal,
   savePublicPage,
+  saveFinanceSettings,
+  saveReminders,
   saveRules,
+  saveTelemedicine,
+  runRemindersNow,
   saveSpecialty,
   saveTestimonial,
   saveUnit,
@@ -31,6 +39,9 @@ const TABS = [
   ["convenios", "Convênios"],
   ["unidades", "Unidades"],
   ["regras", "Regras de agendamento"],
+  ["lembretes", "Lembretes"],
+  ["telemedicina", "Telemedicina"],
+  ["financeiro", "Financeiro"],
   ["conteudo", "FAQ e depoimentos"],
   ["lgpd", "Privacidade (LGPD)"],
 ] as const;
@@ -187,6 +198,55 @@ export default async function Configuracoes({ searchParams }: PageProps<"/admin/
           </ActionForm>
         )}
 
+        {tab === "lembretes" && <Reminders clinic={clinic} />}
+        {tab === "telemedicina" && (
+          <ActionForm action={saveTelemedicine} className="card space-y-5 p-5 sm:p-6">
+            <Field
+              label="Servidor de vídeo (Jitsi)"
+              htmlFor="videoBaseUrl"
+              hint="Padrão: https://meet.jit.si (gratuito). Para uso intenso, use um Jitsi próprio ou o JaaS (8x8)."
+            >
+              <input id="videoBaseUrl" name="videoBaseUrl" type="url" defaultValue={clinic.videoBaseUrl} className="input" />
+            </Field>
+            <label className="flex items-start gap-3 text-[15px]">
+              <input type="checkbox" name="videoEmbed" defaultChecked={clinic.videoEmbed} className="mt-0.5 size-5 accent-[var(--brand)]" />
+              <span>
+                Abrir o vídeo dentro do sistema
+                <span className="block text-sm text-muted">
+                  Deixe desmarcado com o meet.jit.si: o serviço gratuito encerra chamadas incorporadas em sites após 5 minutos. Com Jitsi próprio ou JaaS, marque para ver vídeo e prontuário lado a lado.
+                </span>
+              </span>
+            </label>
+            <Field label="Termo de consentimento da teleconsulta" htmlFor="teleConsentText" hint="O paciente aceita este texto antes de entrar na sala. Em branco, usamos o modelo padrão (Resolução CFM 2.314/2022).">
+              <textarea id="teleConsentText" name="teleConsentText" rows={6} defaultValue={clinic.teleConsentText} placeholder={DEFAULT_TELE_CONSENT} className="input" />
+            </Field>
+            <SubmitButton>Salvar</SubmitButton>
+          </ActionForm>
+        )}
+        {tab === "financeiro" && (
+          <ActionForm action={saveFinanceSettings} className="card space-y-5 p-5 sm:p-6">
+            <div>
+              <h2 className="font-semibold">Taxas da maquininha e do banco</h2>
+              <p className="text-sm text-muted">Usadas na conciliação para reconhecer o valor que cai na conta (valor pago menos a taxa).</p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field label="Crédito (%)" htmlFor="feeCredit">
+                <input id="feeCredit" name="feeCredit" inputMode="decimal" defaultValue={bpToInput(clinic.feeCreditBp)} className="input" placeholder="3,49" />
+              </Field>
+              <Field label="Débito (%)" htmlFor="feeDebit">
+                <input id="feeDebit" name="feeDebit" inputMode="decimal" defaultValue={bpToInput(clinic.feeDebitBp)} className="input" placeholder="1,39" />
+              </Field>
+              <Field label="PIX / link (%)" htmlFor="feePix">
+                <input id="feePix" name="feePix" inputMode="decimal" defaultValue={bpToInput(clinic.feePixBp)} className="input" placeholder="0,99" />
+              </Field>
+            </div>
+            <Field label="CNES da clínica" htmlFor="cnes" hint="7 dígitos. Obrigatório nas guias TISS.">
+              <input id="cnes" name="cnes" inputMode="numeric" maxLength={7} defaultValue={clinic.cnes} className="input sm:w-48" />
+            </Field>
+            <p className="text-sm text-muted">O percentual de repasse de cada profissional fica no cadastro dele, em Profissionais.</p>
+            <SubmitButton>Salvar</SubmitButton>
+          </ActionForm>
+        )}
         {tab === "especialidades" && <Specialties />}
         {tab === "convenios" && <Insurances />}
         {tab === "unidades" && <Units />}
@@ -263,6 +323,25 @@ async function Insurances() {
       <label className="flex min-h-11 items-center gap-2 text-sm">
         <input type="checkbox" name="active" defaultChecked={s?.active ?? true} className="size-4 accent-[var(--brand)]" /> Ativo
       </label>
+      <details className="w-full rounded-xl border border-line px-3 py-2" open={!!s && !s.ansCode}>
+        <summary className="cursor-pointer text-sm font-medium">Faturamento TISS {s && !s.ansCode && <span className="text-amber-700">(preencha para gerar guias)</span>}</summary>
+        <div className="mt-3 grid gap-3 sm:grid-cols-4">
+          <Field label="Registro ANS" htmlFor={`ians-${s?.id ?? "new"}`} hint="6 dígitos">
+            <input id={`ians-${s?.id ?? "new"}`} name="ansCode" inputMode="numeric" maxLength={6} defaultValue={s?.ansCode} className="input" />
+          </Field>
+          <Field label="Código da clínica na operadora" htmlFor={`ipc-${s?.id ?? "new"}`}>
+            <input id={`ipc-${s?.id ?? "new"}`} name="providerCode" defaultValue={s?.providerCode} className="input" />
+          </Field>
+          <Field label="Procedimento (TUSS)" htmlFor={`itu-${s?.id ?? "new"}`} hint="10101012 = consulta em consultório">
+            <input id={`itu-${s?.id ?? "new"}`} name="tussCode" defaultValue={s?.tussCode ?? "10101012"} className="input" />
+          </Field>
+          <Field label="Versão TISS" htmlFor={`itv-${s?.id ?? "new"}`}>
+            <select id={`itv-${s?.id ?? "new"}`} name="tissVersion" defaultValue={s?.tissVersion ?? "4.01.00"} className="input">
+              <option>4.01.00</option>
+            </select>
+          </Field>
+        </div>
+      </details>
       <SubmitButton className="btn-primary">{s ? "Salvar" : "Adicionar"}</SubmitButton>
     </ActionForm>
   );
@@ -398,6 +477,66 @@ async function Content() {
           ))}
         </ul>
       </section>
+    </div>
+  );
+}
+
+const bpToInput = (bp: number) => (bp ? (bp / 100).toFixed(2).replace(".", ",") : "");
+
+const CHANNELS = [
+  ["WHATSAPP", "WhatsApp"],
+  ["SMS", "SMS"],
+  ["EMAIL", "E-mail"],
+] as const;
+
+async function Reminders({ clinic }: { clinic: ClinicData }) {
+  const channels = parseJson<string[]>(clinic.reminderChannels, []);
+  const last = await prisma.notification.findMany({ where: { subject: { startsWith: "Lembrete" } }, orderBy: { createdAt: "desc" }, take: 1 });
+  return (
+    <div className="space-y-4">
+      <ActionForm action={saveReminders} className="card space-y-5 p-5 sm:p-6">
+        <label className="flex items-center gap-3 text-[15px] font-medium">
+          <input type="checkbox" name="remindersEnabled" defaultChecked={clinic.remindersEnabled} className="size-5 accent-[var(--brand)]" /> Enviar lembretes automáticos
+        </label>
+        <fieldset className="space-y-2">
+          <legend className="label">Quando enviar</legend>
+          <div className="flex flex-wrap gap-2">
+            <label className={chk}>
+              <input type="checkbox" name="reminder24h" defaultChecked={clinic.reminder24h} className="size-4 accent-[var(--brand)]" /> 24 h antes (pede confirmação)
+            </label>
+            <label className={chk}>
+              <input type="checkbox" name="reminder2h" defaultChecked={clinic.reminder2h} className="size-4 accent-[var(--brand)]" /> 2 h antes
+            </label>
+          </div>
+        </fieldset>
+        <fieldset className="space-y-2">
+          <legend className="label">Canais</legend>
+          <div className="flex flex-wrap gap-2">
+            {CHANNELS.map(([k, l]) => (
+              <label key={k} className={chk}>
+                <input type="checkbox" name={`ch_${k}`} defaultChecked={channels.includes(k)} className="size-4 accent-[var(--brand)]" /> {l}
+                <span className={`text-xs font-semibold ${providerFor(k) ? "text-emerald-700" : "text-amber-700"}`}>{providerFor(k) ? "conectado" : "simulado"}</span>
+              </label>
+            ))}
+          </div>
+          <p className="text-sm text-muted">
+            “Simulado” significa que a mensagem fica registrada em Comunicação, mas não sai. Para enviar de verdade, configure o provedor no servidor (veja o README).
+          </p>
+        </fieldset>
+        <Field label="Texto do lembrete" htmlFor="reminderTemplate" hint={`Variáveis: ${REMINDER_VARS.join(" ")}`}>
+          <textarea id="reminderTemplate" name="reminderTemplate" rows={4} defaultValue={clinic.reminderTemplate || DEFAULT_REMINDER_TEMPLATE} className="input" />
+        </Field>
+        <SubmitButton>Salvar lembretes</SubmitButton>
+      </ActionForm>
+      <ActionForm action={runRemindersNow} className="card flex flex-wrap items-center justify-between gap-3 p-5">
+        <p className="text-[15px] text-muted">
+          O sistema verifica a cada 5 minutos.
+          {last[0] && ` Último lembrete: ${last[0].createdAt.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" })}.`}
+        </p>
+        <SubmitButton className="btn-secondary" pendingText="Verificando…">
+          Verificar agora
+        </SubmitButton>
+      </ActionForm>
     </div>
   );
 }

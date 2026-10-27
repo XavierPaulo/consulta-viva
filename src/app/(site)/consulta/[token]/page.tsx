@@ -10,6 +10,8 @@ import { brl, fmtLongDate, fmtTime, todayYmd, ymd, fmtWeekdayShort } from "@/lib
 import { now } from "@/lib/format";
 import { Avatar, Badge } from "@/components/ui";
 import { ManageAppointment } from "@/components/manage-appointment";
+import { SubmitButton } from "@/components/client";
+import { confirmByPatient } from "../../actions";
 
 export const metadata: Metadata = { title: "Minha consulta", robots: { index: false } };
 
@@ -88,7 +90,17 @@ export default async function ConsultaPage({ params, searchParams }: PageProps<"
             {appt.type === "TELECONSULTA" ? <Video className="mt-0.5 size-5 text-brand-700" aria-hidden /> : <MapPin className="mt-0.5 size-5 text-brand-700" aria-hidden />}
             <div>
               <dt className="text-sm text-muted">{APPOINTMENT_TYPES[appt.type as keyof typeof APPOINTMENT_TYPES]}</dt>
-              <dd className="font-semibold">{appt.type === "TELECONSULTA" ? "Link enviado antes do horário" : appt.unit ? `${appt.unit.name}` : clinic.address}</dd>
+              <dd className="font-semibold">
+                {appt.type === "TELECONSULTA" ? (
+                  <Link href={`/consulta/${token}/sala`} className="link">
+                    Sala virtual (abre 30 min antes)
+                  </Link>
+                ) : appt.unit ? (
+                  appt.unit.name
+                ) : (
+                  clinic.address
+                )}
+              </dd>
               {appt.type === "PRESENCIAL" && appt.unit && <dd className="text-sm text-muted">{appt.unit.address}</dd>}
             </div>
           </div>
@@ -102,6 +114,15 @@ export default async function ConsultaPage({ params, searchParams }: PageProps<"
             </div>
           </div>
         </dl>
+        {appt.status === "AGENDADA" && isFuture && (
+          <form action={confirmByPatient.bind(null, token)} className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-sky-50 p-4">
+            <p className="text-[15px]">Vai comparecer? Confirme para a clínica se organizar.</p>
+            <SubmitButton className="btn-primary btn-sm" pendingText="Confirmando…">
+              Confirmar presença
+            </SubmitButton>
+          </form>
+        )}
+        {appt.status === "CONFIRMADA" && isFuture && <p className="mt-6 text-[15px] font-medium text-emerald-700">✓ Presença confirmada. Até lá!</p>}
         {pendingLink && appt.status !== "CANCELADA" && (
           <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-brand-50 p-4">
             <p className="text-[15px]">Pagamento antecipado disponível: {brl(pendingLink.amountCents)}</p>
@@ -118,9 +139,12 @@ export default async function ConsultaPage({ params, searchParams }: PageProps<"
         </div>
       )}
       {clinic.cancellationPolicy && <p className="mt-6 text-sm text-muted">{clinic.cancellationPolicy}</p>}
-      <p className="mt-6">
+      <p className="mt-6 flex flex-wrap gap-x-6 gap-y-2">
+        <Link href="/paciente" className="link">
+          Ver todas as minhas consultas
+        </Link>
         <Link href="/" className="link">
-          ← Voltar ao site
+          Voltar ao site
         </Link>
       </p>
     </div>

@@ -2,9 +2,21 @@ import { Field } from "./ui";
 import { MaskedInput } from "./client";
 import { ymd } from "@/lib/format";
 
-type P = { name: string; cpf: string | null; phone: string; email: string; birthDate: Date | null; sex: string; address: string; notes: string; lgpdConsentAt: Date | null };
+type P = {
+  name: string;
+  cpf: string | null;
+  phone: string;
+  email: string;
+  birthDate: Date | null;
+  sex: string;
+  address: string;
+  notes: string;
+  lgpdConsentAt: Date | null;
+  insuranceId: string | null;
+  insuranceCard: string;
+};
 
-export function PatientFields({ p }: { p?: P | null }) {
+export function PatientFields({ p, insurances = [] }: { p?: P | null; insurances?: { id: string; name: string }[] }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       <Field label="Nome completo" htmlFor="name" required className="sm:col-span-2">
@@ -32,6 +44,19 @@ export function PatientFields({ p }: { p?: P | null }) {
       </Field>
       <Field label="Endereço" htmlFor="address">
         <input id="address" name="address" defaultValue={p?.address} className="input" />
+      </Field>
+      <Field label="Convênio" htmlFor="insuranceId">
+        <select id="insuranceId" name="insuranceId" defaultValue={p?.insuranceId ?? ""} className="input">
+          <option value="">Particular</option>
+          {insurances.map((i) => (
+            <option key={i.id} value={i.id}>
+              {i.name}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Nº da carteirinha" htmlFor="insuranceCard" hint="Necessário para faturar consultas pelo convênio (TISS).">
+        <input id="insuranceCard" name="insuranceCard" defaultValue={p?.insuranceCard} className="input" maxLength={20} />
       </Field>
       <Field label="Observações administrativas" htmlFor="notes" className="sm:col-span-2" hint="Não registre dados clínicos aqui — use o prontuário.">
         <textarea id="notes" name="notes" defaultValue={p?.notes} rows={2} className="input" />

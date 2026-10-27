@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarCheck, Globe, Phone, Mail, MessageCircle } from "lucide-react";
+import { CalendarCheck, Globe, Phone, Mail, MessageCircle, UserRound } from "lucide-react";
 import { getClinic, sectionVisible } from "@/lib/clinic";
 import { CookieBanner } from "@/components/client";
 import { onlyDigits } from "@/lib/format";
@@ -48,9 +48,15 @@ export default async function SiteLayout({ children }: LayoutProps<"/">) {
               </Link>
             )}
           </nav>
-          <Link href="/agendar" className="btn-primary shrink-0">
-            Agendar<span className="hidden sm:inline"> consulta</span>
-          </Link>
+          <div className="flex shrink-0 items-center gap-2">
+            <Link href="/paciente" className="btn-secondary" aria-label="Área do paciente">
+              <UserRound className="size-4" aria-hidden />
+              <span className="hidden lg:inline">Área do paciente</span>
+            </Link>
+            <Link href="/agendar" className="btn-primary">
+              Agendar<span className="hidden sm:inline"> consulta</span>
+            </Link>
+          </div>
         </div>
       </header>
       <main id="conteudo" className="flex-1 pb-20">
@@ -90,6 +96,9 @@ export default async function SiteLayout({ children }: LayoutProps<"/">) {
             </Link>
             <Link href="/termos" className="block text-muted hover:text-foreground">
               Termos de Uso
+            </Link>
+            <Link href="/paciente" className="block text-muted hover:text-foreground">
+              Área do paciente
             </Link>
             <Link href="/admin" className="block text-muted hover:text-foreground">
               Acesso da equipe

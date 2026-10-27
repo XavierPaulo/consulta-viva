@@ -113,6 +113,12 @@ export default async function ProfissionalForm({ params, searchParams }: PagePro
               <Field label="Duração da consulta (min)" htmlFor="durationMin">
                 <input id="durationMin" name="durationMin" type="number" min={10} step={5} defaultValue={p?.durationMin ?? 30} className="input" />
               </Field>
+              <Field label="Repasse ao profissional (%)" htmlFor="payoutPercent" hint="Sobre o valor líquido recebido">
+                <input id="payoutPercent" name="payoutPercent" type="number" min={0} max={100} defaultValue={p?.payoutPercent ?? 70} className="input" />
+              </Field>
+              <Field label="CBO (guias TISS)" htmlFor="cbo" hint="225125 = médico clínico">
+                <input id="cbo" name="cbo" inputMode="numeric" maxLength={6} defaultValue={p?.cbo ?? "225125"} className="input" />
+              </Field>
               <Field label="Unidade principal" htmlFor="unitId">
                 <select id="unitId" name="unitId" defaultValue={p?.unitId ?? ""} className="input">
                   <option value="">—</option>
