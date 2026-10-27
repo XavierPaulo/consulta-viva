@@ -192,7 +192,7 @@ export async function saveTelemedicine(_: ActionState, form: FormData): Promise<
   if (!/^https:\/\/[^\s/]+/.test(url)) return { error: "Informe o endereço do servidor começando com https://" };
   await prisma.clinic.update({
     where: { id: "clinic" },
-    data: { videoBaseUrl: url.replace(/\/$/, ""), videoEmbed: !!form.get("videoEmbed"), teleConsentText: str(form, "teleConsentText") },
+    data: { videoBaseUrl: url.replace(/\/$/, ""), videoEmbed: !!form.get("videoEmbed"), transcriptionEnabled: !!form.get("transcriptionEnabled"), teleConsentText: str(form, "teleConsentText") },
   });
   await audit(user, "UPDATE", "Configurações", "telemedicina");
   return done();

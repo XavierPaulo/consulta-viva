@@ -7,9 +7,10 @@ import { can } from "@/lib/permissions";
 import { getClinic } from "@/lib/clinic";
 import { fmtDate, fmtLongDate, fmtTime, now } from "@/lib/format";
 import { ensureRoom, roomState, roomUrl, roomWindow } from "@/lib/video";
+import { transcriptionProvider } from "@/lib/transcription";
 import { ActionForm } from "@/components/action-form";
 import { SubmitButton } from "@/components/client";
-import { SoapFields } from "@/components/soap-form";
+import { AssistedSoap } from "@/components/assisted-soap";
 import { Notice, PageHeader } from "@/components/ui";
 import { PatientPresence, VideoRoom } from "@/components/video-room";
 import { markDoctorJoined } from "../../actions";
@@ -87,7 +88,12 @@ export default async function DoctorRoom({ params, searchParams }: PageProps<"/a
               <input type="hidden" name="appointmentId" value={appt.id} />
               <input type="hidden" name="professionalId" value={appt.professionalId} />
               <input type="hidden" name="returnTo" value={`/admin/agenda/${id}/sala`} />
-              <SoapFields />
+              <AssistedSoap
+                appointmentId={appt.id}
+                availability={!clinic.transcriptionEnabled || state !== "aberta" ? "disabled" : appt.transcriptConsentAt ? "ready" : "no-consent"}
+                demo={transcriptionProvider() === "demo"}
+                embed={clinic.videoEmbed}
+              />
               <label className="flex items-center gap-2 text-[15px]">
                 <input type="checkbox" name="finish" defaultChecked className="size-5 accent-[var(--brand)]" /> Marcar consulta como realizada
               </label>

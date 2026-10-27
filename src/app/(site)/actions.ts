@@ -217,9 +217,19 @@ export async function acceptTeleConsent(token: string, _: FormState, form: FormD
   if (!form.get("consent")) return { error: "Para seguir com a teleconsulta, é preciso concordar com o termo." };
   const appt = await prisma.appointment.findUnique({ where: { manageToken: token } });
   if (!appt || appt.type !== "TELECONSULTA") return { error: "Consulta não encontrada." };
-  if (!appt.teleConsentAt) await prisma.appointment.update({ where: { id: appt.id }, data: { teleConsentAt: new Date() } });
+  if (!appt.teleConsentAt) {
+    const at = new Date();
+    await prisma.appointment.update({ where: { id: appt.id }, data: { teleConsentAt: at, transcriptConsentAt: form.get("transcript") ? at : null } });
+  }
   revalidatePath(`/consulta/${token}/sala`);
   return { ok: true };
+}
+
+export async function setTranscriptConsent(token: string, allow: boolean) {
+  const appt = await prisma.appointment.findUnique({ where: { manageToken: token } });
+  if (!appt || appt.type !== "TELECONSULTA" || !appt.teleConsentAt) return;
+  await prisma.appointment.update({ where: { id: appt.id }, data: { transcriptConsentAt: allow ? new Date() : null } });
+  revalidatePath(`/consulta/${token}/sala`);
 }
 
 export async function markPatientJoined(token: string) {

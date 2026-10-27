@@ -6,7 +6,8 @@ const ctx = await b.newContext({ viewport: { width: 1280, height: 900 } });
 const p = await ctx.newPage();
 const errors = [];
 p.on("pageerror", (e) => errors.push("pageerror " + e.message));
-p.on("console", (m) => m.type() === "error" && errors.push("console " + m.text()));
+// "caret-color" é injetado pelo próprio Playwright ao tirar print durante a hidratação; não é erro do app
+p.on("console", (m) => m.type() === "error" && !/caret-color/.test(m.text()) && errors.push("console " + m.text()));
 const step = async (name, fn) => { try { await fn(); console.log("✓", name); } catch (e) { console.log("✗", name, e.message.split("\n")[0]); await p.screenshot({ path: `${out}/fail-${name.replace(/\W+/g,"_")}.png` }); } };
 
 await p.addInitScript(() => localStorage.setItem("cv_cookies", "todos"));

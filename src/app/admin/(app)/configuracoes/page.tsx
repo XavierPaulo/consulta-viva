@@ -5,6 +5,7 @@ import { can } from "@/lib/permissions";
 import { getClinic } from "@/lib/clinic";
 import { PAYMENT_METHODS, PUBLIC_SECTIONS } from "@/lib/constants";
 import { centsToInput, parseJson } from "@/lib/format";
+import { soapDraftProvider, transcriptionProvider } from "@/lib/transcription";
 import { DEFAULT_TELE_CONSENT } from "@/lib/video";
 import { DEFAULT_REMINDER_TEMPLATE, REMINDER_VARS } from "@/lib/reminders";
 import { providerFor } from "@/lib/notify";
@@ -214,6 +215,21 @@ export default async function Configuracoes({ searchParams }: PageProps<"/admin/
                 Abrir o vídeo dentro do sistema
                 <span className="block text-sm text-muted">
                   Deixe desmarcado com o meet.jit.si: o serviço gratuito encerra chamadas incorporadas em sites após 5 minutos. Com Jitsi próprio ou JaaS, marque para ver vídeo e prontuário lado a lado.
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-3 text-[15px]">
+              <input type="checkbox" name="transcriptionEnabled" defaultChecked={clinic.transcriptionEnabled} className="mt-0.5 size-5 accent-[var(--brand)]" />
+              <span>
+                Transcrição da conversa e rascunho do prontuário por IA
+                <span className="block text-sm text-muted">
+                  O paciente autoriza (ou não) no termo da teleconsulta. O texto aparece ao vivo para o médico, que gera um rascunho de SOAP e revisa antes de salvar. O áudio não é gravado.
+                </span>
+                <span className="mt-1 block text-sm">
+                  Transcrição:{" "}
+                  {transcriptionProvider() === "deepgram" ? <strong className="text-emerald-700">Deepgram conectado</strong> : <strong className="text-amber-700">demonstração (defina DEEPGRAM_API_KEY)</strong>}
+                  {" · "}Rascunho:{" "}
+                  {soapDraftProvider() === "claude" ? <strong className="text-emerald-700">Claude conectado</strong> : <strong className="text-amber-700">demonstração (defina ANTHROPIC_API_KEY)</strong>}
                 </span>
               </span>
             </label>

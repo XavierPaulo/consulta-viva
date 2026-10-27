@@ -100,6 +100,7 @@ await step("sala: termo de consentimento e teste de câmera", async () => {
   await p.goto(B + "/consulta/demo-teleconsulta/sala");
   await p.getByText("Termo de consentimento da teleconsulta").waitFor();
   await p.check('input[name="consent"]');
+  await p.check('input[name="transcript"]');
   await p.getByRole("button", { name: "Concordo e quero continuar" }).click();
   await p.getByRole("button", { name: /Entrar na consulta/ }).waitFor();
   await p.screenshot({ path: `${out}/tele-paciente.png`, fullPage: true });
@@ -112,7 +113,8 @@ await step("sala: entrar abre a chamada em outra aba", async () => {
   await popup.close();
   await p.getByText("A chamada abriu em outra aba").waitFor();
   const a = await db.appointment.findUnique({ where: { manageToken: "demo-teleconsulta" } });
-  if (!a.patientJoinedAt || !a.teleConsentAt) throw new Error("não registrou entrada/consentimento");
+  if (!a.patientJoinedAt || !a.teleConsentAt || !a.transcriptConsentAt) throw new Error("não registrou entrada/consentimento");
+  await p.getByText("Você autorizou a transcrição automática").waitFor();
 });
 await step("sair da área do paciente", async () => {
   await p.goto(B + "/paciente");
@@ -136,11 +138,24 @@ await step("teleconsulta do médico: presença do paciente e SOAP ao lado", asyn
   await p.screenshot({ path: `${out}/tele-medico.png`, fullPage: true });
   await p.fill("#subjective", "Teleconsulta: paciente refere melhora da fadiga.");
   await p.fill("#plan", "Manter sulfato ferroso. Retorno em 60 dias.");
+  // transcrição (modo demonstração) → rascunho do SOAP sem apagar o que o médico escreveu
+  await p.getByRole("button", { name: "Transcrever consulta" }).click();
+  await p.getByText("ao vivo").waitFor();
+  await p.getByText("Retorno em 7 dias se não melhorar").waitFor({ timeout: 40_000 });
+  await p.getByRole("button", { name: "Gerar rascunho do SOAP" }).click();
+  await p.getByText("Rascunho inserido nos campos").waitFor();
+  const subj = await p.inputValue("#subjective");
+  if (!subj.startsWith("Teleconsulta: paciente refere") || !subj.includes("dor de garganta")) throw new Error("subjetivo: " + subj);
+  if (!(await p.inputValue("#assessment")).includes("amigdalite")) throw new Error("avaliação sem a hipótese");
+  if ((await p.inputValue('input[name="medication"]')) !== "amoxicilina 500 mg") throw new Error("receita do rascunho");
+  await p.screenshot({ path: `${out}/tele-transcricao.png`, fullPage: true });
   await p.getByRole("button", { name: "Salvar no prontuário" }).click();
   await p.getByText("Atendimento registrado no prontuário").waitFor();
   if (!p.url().includes("/sala")) throw new Error("saiu da sala ao salvar");
   const after = await db.appointment.findUnique({ where: { id: a.id } });
   if (after.status !== "REALIZADA") throw new Error("não marcou como realizada");
+  const rec = await db.medicalRecord.findFirst({ where: { appointmentId: a.id }, include: { prescriptions: true } });
+  if (!rec?.assessment.includes("amigdalite") || rec.prescriptions[0]?.medication !== "amoxicilina 500 mg") throw new Error("prontuário não recebeu o rascunho revisado");
 });
 await step("pedido LGPD aparece na ficha e é atendido", async () => {
   const pat = await db.patient.findFirst({ where: { cpf: "52998224725" } });

@@ -43,6 +43,7 @@ model Clinic {
   videoBaseUrl       String   @default("https://meet.jit.si") // servidor Jitsi (público ou próprio)
   videoEmbed         Boolean  @default(false) // abrir o vídeo dentro do sistema (exige Jitsi próprio ou JaaS)
   teleConsentText    String   @default("")
+  transcriptionEnabled Boolean @default(true) // transcrição da teleconsulta + rascunho do SOAP por IA
   // Lembretes automáticos
   remindersEnabled   Boolean  @default(true)
   reminder24h        Boolean  @default(true)
@@ -182,6 +183,7 @@ model Appointment {
   manageToken    String          @unique @default(cuid())
   videoRoom      String?         @unique // sala da teleconsulta (gerada na primeira entrada)
   teleConsentAt  DateTime?       // aceite do termo de teleconsulta pelo paciente
+  transcriptConsentAt DateTime?  // autorização (opcional) para transcrever a conversa
   doctorJoinedAt DateTime?
   patientJoinedAt DateTime?
   reminder24hAt  DateTime?

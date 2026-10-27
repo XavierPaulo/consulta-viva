@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Camera, ExternalLink, Mic, Video, VideoOff } from "lucide-react";
 import { Notice } from "./ui";
 
@@ -149,16 +150,21 @@ export function VideoRoom({
 /** Mostra ao médico se o paciente já entrou na sala (consulta a cada 10 s). */
 export function PatientPresence({ appointmentId, initial }: { appointmentId: string; initial: { joinedAt: string | null; consent: boolean } }) {
   const [state, setState] = useState(initial);
+  const router = useRouter();
   useEffect(() => {
     if (state.joinedAt) return;
     const t = setInterval(async () => {
       try {
         const res = await fetch(`/admin/api/sala/${appointmentId}`, { cache: "no-store" });
-        if (res.ok) setState(await res.json());
+        if (!res.ok) return;
+        const next = await res.json();
+        setState(next);
+        // termo aceito ou paciente entrou: atualiza a tela (libera a transcrição, avisos)
+        if (next.consent !== state.consent || next.joinedAt) router.refresh();
       } catch {}
     }, 10_000);
     return () => clearInterval(t);
-  }, [appointmentId, state.joinedAt]);
+  }, [appointmentId, state.joinedAt, state.consent, router]);
   if (state.joinedAt)
     return (
       <p className="flex items-center gap-2 text-[15px] font-medium text-emerald-700" role="status">

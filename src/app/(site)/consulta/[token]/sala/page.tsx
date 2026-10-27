@@ -9,7 +9,8 @@ import { DEFAULT_TELE_CONSENT, ensureRoom, roomState, roomUrl, roomWindow } from
 import { Avatar, Notice } from "@/components/ui";
 import { TeleConsent } from "@/components/tele-consent";
 import { DeviceCheck, VideoRoom } from "@/components/video-room";
-import { markPatientJoined } from "../../../actions";
+import { markPatientJoined, setTranscriptConsent } from "../../../actions";
+import { SubmitButton } from "@/components/client";
 
 export const metadata: Metadata = { title: "Sala da teleconsulta", robots: { index: false } };
 
@@ -51,7 +52,7 @@ export default async function PatientRoom({ params }: PageProps<"/consulta/[toke
         )}
         {state === "encerrada" && <Notice tone="info">Esta teleconsulta foi encerrada ou cancelada. Se precisar, agende um novo horário.</Notice>}
 
-        {state !== "encerrada" && !appt.teleConsentAt && <TeleConsent token={token} text={clinic.teleConsentText || DEFAULT_TELE_CONSENT} />}
+        {state !== "encerrada" && !appt.teleConsentAt && <TeleConsent token={token} text={clinic.teleConsentText || DEFAULT_TELE_CONSENT} transcription={clinic.transcriptionEnabled} />}
 
         {state === "aberta" && room && (
           <>
@@ -60,6 +61,14 @@ export default async function PatientRoom({ params }: PageProps<"/consulta/[toke
             </p>
             <VideoRoom url={roomUrl(clinic.videoBaseUrl, room, appt.patient.name)} embed={clinic.videoEmbed} onJoin={markPatientJoined.bind(null, token)} />
           </>
+        )}
+        {state !== "encerrada" && appt.teleConsentAt && clinic.transcriptionEnabled && (
+          <form action={setTranscriptConsent.bind(null, token, !appt.transcriptConsentAt)} className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-line pt-4 text-sm text-muted">
+            {appt.transcriptConsentAt ? "Você autorizou a transcrição automática da conversa (o áudio não é gravado)." : "Transcrição automática da conversa: não autorizada."}
+            <SubmitButton className="btn-ghost btn-sm" pendingText="…">
+              {appt.transcriptConsentAt ? "Retirar autorização" : "Autorizar"}
+            </SubmitButton>
+          </form>
         )}
         {state === "cedo" && appt.teleConsentAt && (
           <>
