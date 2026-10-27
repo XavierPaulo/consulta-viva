@@ -7,6 +7,7 @@ import { PAYMENT_ENTRY_METHODS, PAYMENT_STATUS } from "@/lib/constants";
 import { addDays, brl, fmtDate, localToDate, todayYmd } from "@/lib/format";
 import { EmptyState, PageHeader, Stat } from "@/components/ui";
 import { PayStatus } from "@/components/status";
+import { FinanceTabs } from "@/components/finance-tabs";
 
 export const metadata = { title: "Financeiro" };
 
@@ -45,6 +46,7 @@ export default async function Financeiro({ searchParams }: PageProps<"/admin/fin
           )
         }
       />
+      <FinanceTabs active="pagamentos" hide={scope ? ["conciliacao", "convenios"] : []} />
       <form className="card mb-5 grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-5" action="/admin/financeiro">
         <div>
           <label className="label" htmlFor="de">

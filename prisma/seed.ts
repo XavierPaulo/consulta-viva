@@ -17,10 +17,16 @@ async function main() {
     prisma.session.deleteMany(),
     prisma.user.deleteMany(),
     prisma.notification.deleteMany(),
+    prisma.statementLine.deleteMany(),
+    prisma.payout.deleteMany(),
+    prisma.patientRequest.deleteMany(),
+    prisma.patientLoginCode.deleteMany(),
+    prisma.patientSession.deleteMany(),
     prisma.prescriptionItem.deleteMany(),
     prisma.medicalRecord.deleteMany(),
     prisma.payment.deleteMany(),
     prisma.appointment.deleteMany(),
+    prisma.tissBatch.deleteMany(),
     prisma.message.deleteMany(),
     prisma.availability.deleteMany(),
     prisma.professional.deleteMany(),
@@ -56,6 +62,10 @@ async function main() {
       cancellationPolicy:
         "Cancelamentos e remarcações podem ser feitos pelo link da confirmação até 24 horas antes da consulta. Após esse prazo, fale com a recepção.",
       hiddenSections: "[]",
+      cnes: "2077485",
+      feeCreditBp: 349,
+      feeDebitBp: 139,
+      feePixBp: 0,
     },
   });
 
@@ -89,7 +99,14 @@ async function main() {
   const sp = Object.fromEntries(specs.map((s) => [s.name, s.id]));
 
   const ins = await Promise.all(
-    ["Unimed", "Bradesco Saúde", "SulAmérica", "Amil"].map((name) => prisma.insurance.create({ data: { name } })),
+    [
+      ["Unimed", "301337", "100245", 14000],
+      ["Bradesco Saúde", "005711", "889012", 15000],
+      ["SulAmérica", "006246", "45021", 13500],
+      ["Amil", "326305", "7781", 12000],
+    ].map(([name, ansCode, providerCode, priceCents]) =>
+      prisma.insurance.create({ data: { name: name as string, ansCode: ansCode as string, providerCode: providerCode as string, priceCents: priceCents as number } }),
+    ),
   );
 
   const weekdays = (from: number, to: number, start: string, end: string, unitId?: string) =>
@@ -173,6 +190,8 @@ async function main() {
     },
   ];
 
+  // CBO-S de cada especialidade (usado nas guias TISS)
+  const CBO: Record<string, string> = { Cardiologia: "225120", Dermatologia: "225135", Pediatria: "225124", Psiquiatria: "225133" };
   const created = [];
   for (const p of pros) {
     const slug = p.name.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, "-");
@@ -184,6 +203,7 @@ async function main() {
           slug,
           crm: p.crm,
           crmUf: "SP",
+          cbo: CBO[p.specialties[0]!] ?? "225125",
           bio: p.bio,
           education: p.education,
           experience: p.experience,
@@ -214,6 +234,10 @@ async function main() {
     ),
   );
 
+  // carteirinhas para o faturamento TISS (João Pedro: Unimed; Helena: Bradesco)
+  await prisma.patient.update({ where: { id: patients[1]!.id }, data: { insuranceId: ins[0]!.id, insuranceCard: "0064123400012345" } });
+  await prisma.patient.update({ where: { id: patients[4]!.id }, data: { insuranceId: ins[1]!.id, insuranceCard: "7788990011223344" } });
+
   const [ana, carlos, juliana, rafael, marina] = created;
   type A = [typeof ana, number, number, string, string, string?, string?];
   const appts: A[] = [
@@ -232,6 +256,7 @@ async function main() {
     [ana!, 3, 4, "08:00", "CANCELADA"],
   ];
   const now = Date.now();
+  let paidCount = 0;
   for (const [pro, pi, d, time, status, type, insuranceId] of appts) {
     const start = at(d, time);
     // pula domingos: empurra para segunda
@@ -253,17 +278,19 @@ async function main() {
       },
     });
     if (status === "REALIZADA") {
-      await prisma.payment.create({
-        data: {
-          patientId: patients[pi]!.id,
-          appointmentId: appt.id,
-          description: `Consulta – ${pro!.title} ${pro!.name}`,
-          amountCents: insuranceId ? 15000 : pro!.priceCents,
-          method: insuranceId ? "CONVENIO" : ["PIX", "CREDITO", "DEBITO"][pi % 3]!,
-          status: insuranceId ? "PENDENTE" : "PAGO",
-          paidAt: insuranceId ? null : start,
-        },
-      });
+      // consultas de convênio são cobradas da operadora pelo lote TISS (Financeiro › Convênios)
+      if (!insuranceId)
+        await prisma.payment.create({
+          data: {
+            patientId: patients[pi]!.id,
+            appointmentId: appt.id,
+            description: `Consulta – ${pro!.title} ${pro!.name}`,
+            amountCents: pro!.priceCents,
+            method: ["PIX", "CREDITO", "DEBITO"][paidCount++ % 3]!,
+            status: "PAGO",
+            paidAt: start,
+          },
+        });
       await prisma.medicalRecord.create({
         data: {
           patientId: patients[pi]!.id,
@@ -296,6 +323,39 @@ async function main() {
       });
     }
   }
+
+  // Teleconsulta de demonstração daqui a ~10 minutos (a sala já está aberta): Fernanda com a Dra. Marina
+  const teleStart = new Date(Math.ceil((now + 10 * 60_000) / 300_000) * 300_000);
+  await prisma.appointment.create({
+    data: {
+      professionalId: marina!.id,
+      patientId: patients[0]!.id,
+      start: teleStart,
+      end: new Date(teleStart.getTime() + marina!.durationMin * 60_000),
+      type: "TELECONSULTA",
+      status: "CONFIRMADA",
+      priceCents: marina!.priceCents,
+      source: "ONLINE",
+      manageToken: "demo-teleconsulta",
+      confirmedAt: new Date(),
+    },
+  });
+
+  // Extrato bancário de exemplo (Financeiro › Conciliação): PIX cai inteiro, cartão cai com a taxa descontada
+  const paid = await prisma.payment.findMany({ where: { status: "PAGO" }, orderBy: { paidAt: "asc" } });
+  const fee = { PIX: 0, CREDITO: 349, DEBITO: 139 } as Record<string, number>;
+  await prisma.statementLine.createMany({
+    data: [
+      ...paid.map((p, i) => ({
+        date: new Date(p.paidAt!.getTime() + (p.method === "PIX" ? 0 : 86400_000)),
+        description: p.method === "PIX" ? `PIX RECEBIDO ${i + 1}` : `VENDA ${p.method === "CREDITO" ? "CREDITO" : "DEBITO"} MAQUININHA`,
+        amountCents: Math.round(p.amountCents * (1 - (fee[p.method] ?? 0) / 10_000)),
+        batch: "exemplo",
+      })),
+      { date: at(-1, "08:00"), description: "TARIFA PACOTE DE SERVICOS", amountCents: -4590, batch: "exemplo", ignored: true },
+      { date: at(-2, "08:00"), description: "PIX RECEBIDO - SEM IDENTIFICACAO", amountCents: 8000, batch: "exemplo" },
+    ],
+  });
 
   await prisma.message.createMany({
     data: [

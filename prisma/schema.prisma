@@ -1,4 +1,4 @@
-// ConsultaViva — modelo de dados do MVP (fase 1)
+// ConsultaViva — modelo de dados (fases 1 e 2)
 // Em desenvolvimento usamos SQLite; para produção troque o provider para "postgresql".
 // Enums são guardados como String (compatível com SQLite); os valores válidos estão em src/lib/constants.ts.
 
@@ -38,6 +38,22 @@ model Clinic {
   minBookingHours    Int      @default(2) // antecedência mínima para agendar online
   cancelMinHours     Int      @default(24) // antecedência mínima para cancelar/reagendar online
   bookingWindowDays  Int      @default(60)
+  cnes               String   @default("") // CNES do estabelecimento (guias TISS)
+  // Telemedicina
+  videoBaseUrl       String   @default("https://meet.jit.si") // servidor Jitsi (público ou próprio)
+  videoEmbed         Boolean  @default(false) // abrir o vídeo dentro do sistema (exige Jitsi próprio ou JaaS)
+  teleConsentText    String   @default("")
+  transcriptionEnabled Boolean @default(true) // transcrição da teleconsulta + rascunho do SOAP por IA
+  // Lembretes automáticos
+  remindersEnabled   Boolean  @default(true)
+  reminder24h        Boolean  @default(true)
+  reminder2h         Boolean  @default(true)
+  reminderChannels   String   @default("[\"WHATSAPP\",\"EMAIL\"]") // JSON: WHATSAPP | SMS | EMAIL
+  reminderTemplate   String   @default("")
+  // Taxas das maquininhas/gateway, em centésimos de % (ex.: 349 = 3,49%) — usadas na conciliação
+  feeCreditBp        Int      @default(0)
+  feeDebitBp         Int      @default(0)
+  feePixBp           Int      @default(0)
   updatedAt          DateTime @updatedAt
 }
 
@@ -67,8 +83,15 @@ model Insurance {
   name          String         @unique
   active        Boolean        @default(true)
   priceCents    Int?           // valor de repasse/tabela padrão (opcional)
+  ansCode       String         @default("") // registro ANS da operadora (6 dígitos)
+  providerCode  String         @default("") // código do prestador (clínica) na operadora
+  tussCode      String         @default("10101012") // procedimento TUSS da consulta
+  tableCode     String         @default("22") // tabela TUSS
+  tissVersion   String         @default("4.01.00")
   professionals Professional[]
   appointments  Appointment[]
+  patients      Patient[]
+  tissBatches   TissBatch[]
 }
 
 model Professional {
@@ -88,6 +111,8 @@ model Professional {
   inPerson      Boolean         @default(true)
   telemedicine  Boolean         @default(false)
   published     Boolean         @default(true)
+  cbo           String          @default("225125") // CBO-S (guias TISS); 225125 = médico clínico
+  payoutPercent Int             @default(70) // % do valor recebido repassado ao profissional
   unitId        String?
   unit          Unit?           @relation(fields: [unitId], references: [id])
   specialties   Specialty[]
@@ -96,6 +121,7 @@ model Professional {
   appointments  Appointment[]
   records       MedicalRecord[]
   messages      Message[]
+  payouts       Payout[]
   user          User?
   createdAt     DateTime        @default(now())
 }
@@ -122,11 +148,18 @@ model Patient {
   address        String          @default("")
   notes          String          @default("")
   lgpdConsentAt  DateTime?
+  remindersOptOut Boolean        @default(false) // paciente pediu para não receber lembretes
+  insuranceId    String?         // convênio habitual
+  insurance      Insurance?      @relation(fields: [insuranceId], references: [id])
+  insuranceCard  String          @default("") // número da carteirinha
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   appointments   Appointment[]
   records        MedicalRecord[]
   payments       Payment[]
+  portalSessions PatientSession[]
+  loginCodes     PatientLoginCode[]
+  requests       PatientRequest[]
 }
 
 model Appointment {
@@ -148,6 +181,18 @@ model Appointment {
   notes          String          @default("")
   cancelReason   String          @default("")
   manageToken    String          @unique @default(cuid())
+  videoRoom      String?         @unique // sala da teleconsulta (gerada na primeira entrada)
+  teleConsentAt  DateTime?       // aceite do termo de teleconsulta pelo paciente
+  transcriptConsentAt DateTime?  // autorização (opcional) para transcrever a conversa
+  doctorJoinedAt DateTime?
+  patientJoinedAt DateTime?
+  reminder24hAt  DateTime?
+  reminder2hAt   DateTime?
+  confirmedAt    DateTime?
+  tissBatchId    String?
+  tissBatch      TissBatch?      @relation(fields: [tissBatchId], references: [id])
+  tissGuide      String          @default("") // nº da guia do prestador
+  authCode       String          @default("") // senha/autorização da operadora (se houver)
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
   records        MedicalRecord[]
@@ -202,6 +247,9 @@ model Payment {
   linkToken      String?      @unique
   gateway        String       @default("manual")
   gatewayRef     String       @default("")
+  feeCents       Int          @default(0) // taxa cobrada pela operadora/banco (conciliação)
+  reconciledAt   DateTime?
+  statementLine  StatementLine?
   createdById    String?
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
@@ -239,7 +287,7 @@ model FaqItem {
   order    Int    @default(0)
 }
 
-// Fila de mensagens (e-mail/SMS/WhatsApp). No MVP o envio é simulado e fica registrado aqui.
+// Fila de mensagens (e-mail/SMS/WhatsApp). Sem provedor configurado, o envio é simulado e fica registrado aqui.
 model Notification {
   id        String   @id @default(cuid())
   channel   String   // EMAIL | SMS | WHATSAPP
@@ -247,6 +295,8 @@ model Notification {
   subject   String   @default("")
   body      String
   status    String   @default("SIMULADO") // SIMULADO | ENVIADO | FALHOU
+  provider  String   @default("simulado")
+  error     String   @default("")
   related   String   @default("")
   createdAt DateTime @default(now())
 }
@@ -303,4 +353,96 @@ model AuditLog {
 
   @@index([createdAt])
   @@index([entity, entityId])
+}
+
+// ---- Fase 2: Área do paciente ----
+
+model PatientLoginCode {
+  id        String    @id @default(cuid())
+  patientId String
+  patient   Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  codeHash  String
+  channel   String    // WHATSAPP | SMS | EMAIL
+  attempts  Int       @default(0)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([patientId, createdAt])
+}
+
+model PatientSession {
+  id         String   @id @default(cuid())
+  tokenHash  String   @unique
+  patientId  String
+  patient    Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  lastSeenAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+}
+
+// Pedidos do titular (LGPD): correção, exclusão, revogação de consentimento
+model PatientRequest {
+  id         String    @id @default(cuid())
+  patientId  String
+  patient    Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  kind       String    // CORRECAO | EXCLUSAO | REVOGACAO | OUTRO
+  details    String    @default("")
+  status     String    @default("ABERTO") // ABERTO | CONCLUIDO
+  resolvedAt DateTime?
+  createdAt  DateTime  @default(now())
+}
+
+// ---- Fase 2: Financeiro completo ----
+
+// Repasse pago ao profissional referente a um mês
+model Payout {
+  id             String       @id @default(cuid())
+  professionalId String
+  professional   Professional @relation(fields: [professionalId], references: [id])
+  period         String       // "2026-10"
+  grossCents     Int          // total recebido das consultas do profissional no mês
+  amountCents    Int          // valor repassado
+  paidAt         DateTime     @default(now())
+  notes          String       @default("")
+  createdById    String?
+
+  @@unique([professionalId, period])
+}
+
+// Linha de extrato bancário/adquirente importada para conciliação
+model StatementLine {
+  id          String   @id @default(cuid())
+  date        DateTime
+  description String
+  amountCents Int
+  batch       String   // identifica o arquivo importado
+  paymentId   String?  @unique
+  payment     Payment? @relation(fields: [paymentId], references: [id])
+  ignored     Boolean  @default(false) // não é recebimento de paciente (tarifa, transferência etc.)
+  importedAt  DateTime @default(now())
+
+  @@unique([date, amountCents, description])
+}
+
+// ---- Fase 2: Convênios (TISS) ----
+
+model TissBatch {
+  id            String        @id @default(cuid())
+  number        Int           // número do lote do prestador
+  insuranceId   String
+  insurance     Insurance     @relation(fields: [insuranceId], references: [id])
+  status        String        @default("GERADO") // GERADO | ENVIADO | PAGO | GLOSADO | CANCELADO
+  totalCents    Int
+  receivedCents Int?
+  glosaCents    Int?
+  sentAt        DateTime?
+  paidAt        DateTime?
+  notes         String        @default("")
+  xml           String
+  createdById   String?
+  createdAt     DateTime      @default(now())
+  appointments  Appointment[]
+
+  @@unique([insuranceId, number])
 }

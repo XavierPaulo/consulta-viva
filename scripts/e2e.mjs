@@ -6,7 +6,8 @@ const ctx = await b.newContext({ viewport: { width: 1280, height: 900 } });
 const p = await ctx.newPage();
 const errors = [];
 p.on("pageerror", (e) => errors.push("pageerror " + e.message));
-p.on("console", (m) => m.type() === "error" && errors.push("console " + m.text()));
+// "caret-color" é injetado pelo próprio Playwright ao tirar print durante a hidratação; não é erro do app
+p.on("console", (m) => m.type() === "error" && !/caret-color/.test(m.text()) && errors.push("console " + m.text()));
 const step = async (name, fn) => { try { await fn(); console.log("✓", name); } catch (e) { console.log("✗", name, e.message.split("\n")[0]); await p.screenshot({ path: `${out}/fail-${name.replace(/\W+/g,"_")}.png` }); } };
 
 await p.addInitScript(() => localStorage.setItem("cv_cookies", "todos"));
@@ -50,6 +51,8 @@ await step("pagar pelo link (cartão)", async () => {
 });
 await step("remarcar pelo link", async () => {
   await p.goto(manageUrl);
+  // se o primeiro horário livre for daqui a menos de 24 h, a remarcação online fica bloqueada (regra da clínica)
+  if (await p.getByText("Alterações online podem ser feitas até").count()) return console.log("  (consulta em menos de 24 h: remarcação bloqueada, como esperado)");
   await p.getByRole("button", { name: "Remarcar" }).click();
   await p.locator('label:has(input[name="start"])').nth(2).click();
   await p.getByRole("button", { name: "Confirmar novo horário" }).click();

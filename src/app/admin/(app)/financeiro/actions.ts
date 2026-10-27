@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db";
 import { audit, requireUser } from "@/lib/auth";
 import { getClinic } from "@/lib/clinic";
 import { getGateway } from "@/lib/payments";
-import { sendNotification } from "@/lib/notify";
+import { appUrl, sendNotification } from "@/lib/notify";
 import { brl, localToDate, parseMoney } from "@/lib/format";
 import { PAYMENT_ENTRY_METHODS } from "@/lib/constants";
 import type { ActionState } from "@/components/action-form";
@@ -44,7 +44,7 @@ export async function createPayment(_: ActionState, form: FormData): Promise<Act
     });
     await audit(user, "CREATE", "Pagamento", pay.id, `Link de pagamento ${brl(amountCents)}`);
     if (form.get("notify"))
-      await sendNotification({ channel: "WHATSAPP", to: pay.patient.phone, body: `Olá, ${pay.patient.name.split(" ")[0]}! Segue o link para pagamento de ${brl(amountCents)}: ${link.url}`, related: pay.id });
+      await sendNotification({ channel: "WHATSAPP", to: pay.patient.phone, body: `Olá, ${pay.patient.name.split(" ")[0]}! Segue o link para pagamento de ${brl(amountCents)}: ${appUrl(link.url)}`, related: pay.id });
     redirect(`/admin/financeiro/${pay.id}?ok=link`);
   }
 
@@ -90,7 +90,7 @@ export async function createPaymentLink(appointmentId: string) {
   await sendNotification({
     channel: "WHATSAPP",
     to: appt.patient.phone,
-    body: `Olá, ${appt.patient.name.split(" ")[0]}! Segue o link para pagamento da sua consulta (${brl(appt.priceCents)}): ${link.url}`,
+    body: `Olá, ${appt.patient.name.split(" ")[0]}! Segue o link para pagamento da sua consulta (${brl(appt.priceCents)}): ${appUrl(link.url)}`,
     related: pay.id,
   });
   await audit(user, "CREATE", "Pagamento", pay.id, "Link de pagamento gerado e enviado");

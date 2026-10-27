@@ -6,6 +6,7 @@ import { audit, requireUser } from "@/lib/auth";
 import { parseMoney, slugify } from "@/lib/format";
 import { PAYMENT_METHODS, PUBLIC_SECTIONS } from "@/lib/constants";
 import type { ActionState } from "@/components/action-form";
+import { DEFAULT_REMINDER_TEMPLATE, runReminders } from "@/lib/reminders";
 
 const str = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
 
@@ -86,7 +87,16 @@ export async function saveInsurance(id: string | null, _: ActionState, form: For
   const user = await guard();
   const name = str(form, "name");
   if (!name) return { error: "Informe o nome." };
-  const data = { name, active: !!form.get("active"), priceCents: form.get("price") ? parseMoney(form.get("price")) : null };
+  const ansCode = str(form, "ansCode").replace(/\D/g, "");
+  if (ansCode && ansCode.length !== 6) return { error: "O registro ANS tem 6 dígitos." };
+  const data = {
+    name,
+    active: !!form.get("active"),
+    priceCents: form.get("price") ? parseMoney(form.get("price")) : null,
+    ...(form.has("ansCode")
+      ? { ansCode, providerCode: str(form, "providerCode"), tussCode: str(form, "tussCode") || "10101012", tissVersion: str(form, "tissVersion") || "4.01.00" }
+      : {}),
+  };
   try {
     if (id) await prisma.insurance.update({ where: { id }, data });
     else await prisma.insurance.create({ data });
@@ -144,4 +154,64 @@ export async function deleteTestimonial(id: string) {
   await prisma.testimonial.delete({ where: { id } });
   await audit(user, "DELETE", "Depoimento", id);
   revalidatePath("/", "layout");
+}
+
+export async function saveReminders(_: ActionState, form: FormData): Promise<ActionState> {
+  const user = await guard();
+  const channels = ["WHATSAPP", "SMS", "EMAIL"].filter((c) => form.get(`ch_${c}`));
+  const enabled = !!form.get("remindersEnabled");
+  if (enabled && !channels.length) return { error: "Escolha ao menos um canal para os lembretes." };
+  const template = str(form, "reminderTemplate");
+  await prisma.clinic.update({
+    where: { id: "clinic" },
+    data: {
+      remindersEnabled: enabled,
+      reminder24h: !!form.get("reminder24h"),
+      reminder2h: !!form.get("reminder2h"),
+      reminderChannels: JSON.stringify(channels),
+      reminderTemplate: template === DEFAULT_REMINDER_TEMPLATE ? "" : template,
+    },
+  });
+  await audit(user, "UPDATE", "Configurações", "lembretes", channels.join(", "));
+  return done("Lembretes salvos.");
+}
+
+export async function runRemindersNow(): Promise<ActionState> {
+  const user = await guard();
+  const r = await runReminders();
+  await audit(user, "NOTIFY", "Lembretes", "", `Execução manual: ${r.sent24} de 24 h, ${r.sent2} de 2 h`);
+  revalidatePath("/admin/configuracoes");
+  if ("skipped" in r && r.skipped) return { ok: true, message: `Lembretes ${r.skipped}.` };
+  const total = r.sent24 + r.sent2;
+  return { ok: true, message: total ? `${total} lembrete(s) enviado(s) agora.` : "Nenhum lembrete pendente neste momento." };
+}
+
+export async function saveTelemedicine(_: ActionState, form: FormData): Promise<ActionState> {
+  const user = await guard();
+  const url = str(form, "videoBaseUrl") || "https://meet.jit.si";
+  if (!/^https:\/\/[^\s/]+/.test(url)) return { error: "Informe o endereço do servidor começando com https://" };
+  await prisma.clinic.update({
+    where: { id: "clinic" },
+    data: { videoBaseUrl: url.replace(/\/$/, ""), videoEmbed: !!form.get("videoEmbed"), transcriptionEnabled: !!form.get("transcriptionEnabled"), teleConsentText: str(form, "teleConsentText") },
+  });
+  await audit(user, "UPDATE", "Configurações", "telemedicina");
+  return done();
+}
+
+/** "3,49" → 349 (centésimos de %) */
+function percentToBp(v: string) {
+  const n = Number(v.replace(",", "."));
+  return Number.isFinite(n) && n > 0 ? Math.round(Math.min(n, 30) * 100) : 0;
+}
+
+export async function saveFinanceSettings(_: ActionState, form: FormData): Promise<ActionState> {
+  const user = await guard();
+  const cnes = str(form, "cnes").replace(/\D/g, "");
+  if (cnes && cnes.length !== 7) return { error: "O CNES tem 7 dígitos." };
+  await prisma.clinic.update({
+    where: { id: "clinic" },
+    data: { feeCreditBp: percentToBp(str(form, "feeCredit")), feeDebitBp: percentToBp(str(form, "feeDebit")), feePixBp: percentToBp(str(form, "feePix")), cnes },
+  });
+  await audit(user, "UPDATE", "Configurações", "financeiro");
+  return done();
 }

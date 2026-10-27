@@ -56,6 +56,11 @@ export default async function ConsultaAdmin({ params }: PageProps<"/admin/agenda
         }
         actions={
           <>
+            {appt.type === "TELECONSULTA" && appt.status !== "CANCELADA" && (
+              <Link href={`/admin/agenda/${appt.id}/sala`} className="btn-primary bg-violet-600 hover:bg-violet-700">
+                <Video className="size-4" aria-hidden /> Sala de vídeo
+              </Link>
+            )}
             {canRecord && appt.status !== "CANCELADA" && (
               <Link href={appt.records[0] ? `/admin/prontuario/${appt.records[0].id}` : `/admin/prontuario/novo?consulta=${appt.id}`} className="btn-primary">
                 <FileText className="size-4" aria-hidden /> {appt.records[0] ? "Ver prontuário" : "Iniciar atendimento"}
@@ -98,11 +103,7 @@ export default async function ConsultaAdmin({ params }: PageProps<"/admin/agenda
                     <Bell className="size-4" aria-hidden /> Enviar lembrete
                   </SubmitButton>
                 </form>
-                {appt.type === "TELECONSULTA" && (
-                  <span className="btn-secondary pointer-events-none opacity-60" title="Sala de vídeo integrada chega na fase 2">
-                    <Video className="size-4" aria-hidden /> Sala de vídeo (fase 2)
-                  </span>
-                )}
+
               </div>
             </section>
           )}

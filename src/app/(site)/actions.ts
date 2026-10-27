@@ -4,11 +4,12 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
 import { getClinic } from "@/lib/clinic";
-import { sendNotification } from "@/lib/notify";
+import { appUrl, sendNotification } from "@/lib/notify";
 import { isSlotFree } from "@/lib/slots";
 import { brl, fmtDateTime, isValidCpf, onlyDigits } from "@/lib/format";
 import { APPOINTMENT_TYPES } from "@/lib/constants";
 import { getGateway } from "@/lib/payments";
+import { roomState } from "@/lib/video";
 
 export type FormState = { ok?: boolean; error?: string; fieldErrors?: Record<string, string>; message?: string };
 
@@ -132,8 +133,12 @@ export async function bookAppointment(_: FormState, form: FormData): Promise<For
 
   const when = fmtDateTime(start);
   const text = `Olá, ${appt.patient.name.split(" ")[0]}! Sua consulta com ${pro.title} ${pro.name} está agendada para ${when} (${APPOINTMENT_TYPES[type]}${
-    type === "PRESENCIAL" && appt.unit ? ` – ${appt.unit.name}, ${appt.unit.address}` : ""
-  }). Valor: ${insuranceId ? "convênio" : brl(pro.priceCents)}. Para cancelar ou remarcar: /consulta/${appt.manageToken}`;
+    type === "PRESENCIAL" && appt.unit
+      ? ` – ${appt.unit.name}, ${appt.unit.address}`
+      : type === "TELECONSULTA"
+        ? ` – sala virtual: ${appUrl(`/consulta/${appt.manageToken}/sala`)}`
+        : ""
+  }). Valor: ${insuranceId ? "convênio" : brl(pro.priceCents)}. Para cancelar ou remarcar: ${appUrl(`/consulta/${appt.manageToken}`)}`;
   await sendNotification({ channel: "EMAIL", to: appt.patient.email, subject: "Consulta agendada", body: text, related: appt.id });
   await sendNotification({ channel: "WHATSAPP", to: appt.patient.phone, body: text, related: appt.id });
 
@@ -195,4 +200,40 @@ export async function payByLink(token: string, _: FormState, form: FormData): Pr
   });
   revalidatePath(`/pagar/${token}`);
   return { ok: true, message: "Pagamento confirmado. Obrigado!" };
+}
+
+/** Paciente confirma presença pelo link do lembrete ou pela Área do paciente. */
+export async function confirmByPatient(token: string) {
+  const appt = await prisma.appointment.findUnique({ where: { manageToken: token } });
+  if (appt && appt.status === "AGENDADA" && appt.start.getTime() > Date.now()) {
+    await prisma.appointment.update({ where: { id: appt.id }, data: { status: "CONFIRMADA", confirmedAt: new Date() } });
+  }
+  revalidatePath(`/consulta/${token}`);
+  revalidatePath("/paciente", "layout");
+}
+
+/** Aceite do termo de teleconsulta (Resolução CFM 2.314/2022). */
+export async function acceptTeleConsent(token: string, _: FormState, form: FormData): Promise<FormState> {
+  if (!form.get("consent")) return { error: "Para seguir com a teleconsulta, é preciso concordar com o termo." };
+  const appt = await prisma.appointment.findUnique({ where: { manageToken: token } });
+  if (!appt || appt.type !== "TELECONSULTA") return { error: "Consulta não encontrada." };
+  if (!appt.teleConsentAt) {
+    const at = new Date();
+    await prisma.appointment.update({ where: { id: appt.id }, data: { teleConsentAt: at, transcriptConsentAt: form.get("transcript") ? at : null } });
+  }
+  revalidatePath(`/consulta/${token}/sala`);
+  return { ok: true };
+}
+
+export async function setTranscriptConsent(token: string, allow: boolean) {
+  const appt = await prisma.appointment.findUnique({ where: { manageToken: token } });
+  if (!appt || appt.type !== "TELECONSULTA" || !appt.teleConsentAt) return;
+  await prisma.appointment.update({ where: { id: appt.id }, data: { transcriptConsentAt: allow ? new Date() : null } });
+  revalidatePath(`/consulta/${token}/sala`);
+}
+
+export async function markPatientJoined(token: string) {
+  const appt = await prisma.appointment.findUnique({ where: { manageToken: token } });
+  if (!appt || roomState(appt) !== "aberta" || !appt.teleConsentAt) return;
+  await prisma.appointment.update({ where: { id: appt.id }, data: { patientJoinedAt: new Date() } });
 }

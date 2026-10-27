@@ -20,6 +20,8 @@ function readPatient(form: FormData) {
     sex: str(form, "sex"),
     address: str(form, "address"),
     notes: str(form, "notes"),
+    insuranceId: str(form, "insuranceId") || null,
+    insuranceCard: str(form, "insuranceCard").replace(/\s/g, ""),
   };
 }
 
@@ -61,4 +63,11 @@ export async function updatePatient(id: string, _: ActionState, form: FormData):
   await audit(user, "UPDATE", "Paciente", id, changed.length ? `Campos: ${changed.join(", ")}` : "");
   revalidatePath(`/admin/pacientes/${id}`);
   return { ok: true, message: "Cadastro atualizado." };
+}
+
+export async function resolvePrivacyRequest(id: string) {
+  const user = await requireUser("pacientes", "edit");
+  const r = await prisma.patientRequest.update({ where: { id }, data: { status: "CONCLUIDO", resolvedAt: new Date() } });
+  await audit(user, "UPDATE", "Pedido LGPD", r.patientId, `${r.kind} atendido`);
+  revalidatePath(`/admin/pacientes/${r.patientId}`);
 }

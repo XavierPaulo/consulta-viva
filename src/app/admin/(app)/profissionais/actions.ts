@@ -54,6 +54,8 @@ export async function saveProfessional(id: string | null, _: ActionState, form: 
     experience: str(form, "experience"),
     priceCents: parseMoney(form.get("price")),
     durationMin: Math.max(10, Number(str(form, "durationMin")) || 30),
+    payoutPercent: Math.max(0, Math.min(100, Number(str(form, "payoutPercent") || 70))),
+    cbo: str(form, "cbo").replace(/\D/g, "") || "225125",
     inPerson,
     telemedicine,
     published: !!form.get("published"),

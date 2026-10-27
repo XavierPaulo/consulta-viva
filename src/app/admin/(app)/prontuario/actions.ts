@@ -37,6 +37,9 @@ export async function saveRecord(_: ActionState, form: FormData): Promise<Action
   });
   if (appointmentId && form.get("finish")) await prisma.appointment.update({ where: { id: appointmentId }, data: { status: "REALIZADA" } });
   await audit(user, "CREATE", "Prontuário", rec.id, `Paciente ${patientId}`);
+  // na sala da teleconsulta, volta para a sala (a chamada continua aberta)
+  const returnTo = str(form, "returnTo");
+  if (returnTo.startsWith("/admin/agenda/")) redirect(`${returnTo}?registro=${rec.id}`);
   redirect(`/admin/prontuario/${rec.id}?ok=1`);
 }
 
